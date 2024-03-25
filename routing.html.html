@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Interactive base map with Features</title>
+    <link rel="stylesheet" type="text/css" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
+    <style>
+        /* Define the map container's size */
+        #map {
+            width: 100%;
+            height: 80vh; /* Adjusted height to allow space for user input */
+        }
+    </style>
+</head>
+<body>
+    <!-- Map container -->
+    <div id="map"></div>
+
+    <!-- Input fields for origin and destination -->
+    <div>
+        <label for="origin">Origin City:</label>
+        <input type="text" id="origin" placeholder="Enter origin city">
+        <label for="destination">Destination City:</label>
+        <input type="text" id="destination" placeholder="Enter destination city">
+        <button onclick="calculateRoute()">Calculate Route</button>
+    </div>
+
+    <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
+    <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
+    <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
+    <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
+    <script type="text/javascript" src="https://js.api.here.com/v3/3.1/mapsjs-clustering.js"></script>
+    <script>
+        // Initialize communication with the platform
+        const platform = new H.service.Platform({
+            apikey: 'ASZ504_wlfdW66Vvc8xZwfHo4ZRLhrv78Qyv0e8wRTM'
+        });
+
+        // Default options for the base layers that are used to render a map
+        var defaultLayers = platform.createDefaultLayers();
+        
+        // Initialize the map
+        var map = new H.Map(document.getElementById('map'), 
+            defaultLayers.vector.normal.map, {
+                zoom: 5,
+                center: { lng: 78.9629, lat: 20.5937 } // Coordinates for India
+            }
+        );
+
+        // add a resize listener to make sure that the map occupies the whole container
+        window.addEventListener('resize', () => map.getViewPort().resize());
+
+        // MapEvents enables the event system
+        // Behavior implements default interactions for pan/zoom (also on mobile touch environments)
+        var behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+
+        // Create the default UI components
+        var ui = H.ui.UI.createDefault(map, defaultLayers);
+
+        // Function to calculate route based on user input
+        function calculateRoute() {
+            var originCity = document.getElementById('origin').value;
+            var destinationCity = document.getElementById('destination').value;
+
+            var geocodingParams = {
+                q: originCity // Using 'q' parameter for search text
+            };
+
+            var routingParams = {};
+
+            // Use Geocoding API to convert origin city name to coordinates
+            var geocoder = platform.getSearchService();
+            geocoder.geocode(geocodingParams, function(result) {
+                var originCoordinates = result.items[0].position;
+
+                routingParams.origin = originCoordinates.lat + ',' + originCoordinates.lng;
+
+                // Use Geocoding API to convert destination city name to coordinates
+                geocodingParams.q = destinationCity; // Update search text parameter
+                geocoder.geocode(geocodingParams, function(result) {
+                    var destinationCoordinates = result.items[0].position;
+
+                    routingParams.destination = destinationCoordinates.lat + ',' + destinationCoordinates.lng;
+
+                    routingParams.routingMode = 'fast';
+                    routingParams.transportMode = 'car';
+                    routingParams.return = 'polyline';
+
+                    var router = platform.getRoutingService(null, 8);
+
+                    var onResult = function(result) {
+                        if (result.routes.length) {
+                            result.routes[0].sections.forEach((section) => {
+                                let linestring = H.geo.LineString.fromFlexiblePolyline(section.polyline);
+                                let routeLine = new H.map.Polyline(linestring, {
+                                    style: { strokeColor: 'navy', lineWidth: 3 }
+                                });
+                                let startMarker = new H.map.Marker(section.departure.place.location);
+                                let endMarker = new H.map.Marker(section.arrival.place.location);
+                                map.addObjects([routeLine, startMarker, endMarker]);
+                            });
+                        }
+                    };
+
+                    router.calculateRoute(routingParams, onResult, function(error) {
+                        alert(error.message);
+                    });
+                }, function(error) {
+                    alert(error);
+                });
+            }, function(error) {
+                alert(error);
+            });
+        }
+
+    </script>
+</body>
+</html>
